@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Игра Историй с Озвучкой</title>
+    <style>
+        /*
+        * CSS - Стили для красивого отображения (Удален #initial-overlay)
+        */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: #4CAF50;
+        }
+
+        #controls {
+            margin-bottom: 30px;
+            display: flex; /* Сразу показываем контролы */
+            gap: 15px;
+        }
+
+        button.story-button {
+            padding: 12px 25px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            transition: background-color 0.3s ease;
+        }
+
+        #start-scary { background-color: #f44336; color: white; }
+        #start-scary:hover { background-color: #d32f2f; }
+
+        #start-strange { background-color: #ff9800; color: white; }
+        #start-strange:hover { background-color: #f57c00; }
+
+        #start-funny { background-color: #2196f3; color: white; }
+        #start-funny:hover { background-color: #1976d2; }
+
+        #story-container {
+            background-color: #1e1e1e;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 800px;
+            min-height: 200px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        #story-text {
+            font-size: 1.2em;
+            line-height: 1.6;
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        #voice-settings {
+            background-color: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            width: 90%;
+            max-width: 800px;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        input[type="range"] {
+            width: 70%;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎮 Игра Историй</h1>
+
+    <div id="controls">
+        <button id="start-scary" class="story-button">Страшная 👻</button>
+        <button id="start-strange" class="story-button">Странная 👽</button>
+        <button id="start-funny" class="story-button">Смешная 😂</button>
+    </div>
+
+    <div id="voice-settings">
+        <h3>Настройка голоса (Тона)</h3>
+        <p>Эти настройки влияют на озвучку текста.</p>
+
+        <div class="setting-row">
+            <label for="pitch-range">Тон голоса (Высота):</label>
+            <input type="range" id="pitch-range" min="0" max="2" step="0.1" value="1">
+            <span id="pitch-value">1.0</span>
+        </div>
+
+        <div class="setting-row">
+            <label for="rate-range">Скорость речи:</label>
+            <input type="range" id="rate-range" min="0.5" max="2" step="0.1" value="1">
+            <span id="rate-value">1.0</span>
+        </div>
+    </div>
+
+    <div id="story-container">
+        <p id="story-text">Выберите жанр, чтобы начать.</p>
+    </div>
+
+    <button id="next-part" style="display: none; margin-top: 20px;" disabled>Продолжить ></button>
+
+    <script>
+        /*
+        * JAVASCRIPT - Логика игры, озвучка и звук
+        */
+
+        // === 1. Элементы управления ===
+        // Убрали ссылки на overlay
+        const storyTextElement = document.getElementById('story-text');
+        const nextButton = document.getElementById('next-part');
+        const pitchRange = document.getElementById('pitch-range');
+        const rateRange = document.getElementById('rate-range');
+        const pitchValueSpan = document.getElementById('pitch-value');
+        const rateValueSpan = document.getElementById('rate-value');
+
+        // Текущее состояние игры
+        let currentStory = [];
+        let currentPartIndex = 0;
+        let isSpeaking = false;
+        let ttsEnabled = ('speechSynthesis' in window); // Проверяем поддержку сразу при загрузке
+
+        // === 2. Настройки и данные ===
+
+        const soundEffects = {}; // Объект для звуков остается пустым, пока ты их не добавишь
+
+        // 💡 ВНИМАНИЕ: Если ты добавишь свои звуки, РАСКОММЕНТИРУЙ ЭТОТ БЛОК:
+        /*
+        const soundEffects = {
+            knocks: new Audio('sounds/knocks.mp3'),
+            scream: new Audio('sounds/scream.mp3'),
+            laugh: new Audio('sounds/laugh.mp3')
+        };
+        soundEffects.knocks.volume = 0.7;
+        soundEffects.scream.volume = 0.8;
+        soundEffects.laugh.volume = 0.6;
+        */
+
+        // Базы историй (Остаются прежними)
+        const allStories = {
+            scary: [
+                // Страшная История 1
+                [
+                    "Ночь была темной и тихой. Я читал книгу, и мне казалось, что я в квартире один. [KNOCKS]",
+                    "Вдруг по двери кто-то начал стучать. Громкие и медленные **стуки** раздавались один за другим. Я замер.",
+                    "Я подошел к двери и спросил: 'Кто там?' В ответ была тишина... а потом раздался леденящий душу крик. [SCREAM]",
+                    "Конец. Выжил ли я? Это останется загадкой..."
+                ],
+                // Страшная История 2 (НОВАЯ)
+                [
+                    "Я ехал по пустой трассе, и вдруг фары осветили старую, заброшенную бензоколонку. [SCREAM]",
+                    "Двигатель заглох. Я вышел и услышал, как что-то скребется по металлу. [KNOCKS]",
+                    "Надпись на стене гласила: 'Уходи, пока можешь'. Я почувствовал, как кто-то дышит мне в шею.",
+                    "Конец. Похоже, сегодня я останусь здесь навсегда..."
+                ]
+            ],
+            strange: [
+                // Странная История 1
+                [
+                    "Я шел по улице и увидел кота. Обычный серый кот. Но он сидел на дереве и читал газету.",
+                    "Я протер глаза. Кот сложил газету, посмотрел на меня и сказал: 'Уже не так тихо, как раньше'.",
+                    "Он спрыгнул и побежал в сторону ближайшего магазина. Я догнал его и спросил, что это значит. Он только рассмеялся. [LAUGH]",
+                    "Конец. Я до сих пор не знаю, что это было за объявление в газете..."
+                ],
+                // Странная История 2 (НОВАЯ)
+                [
+                    "Вчера вечером мне пришло сообщение с моего собственного номера: 'Ты забыл, как летать'.",
+                    "Я попытался ответить, но телефон показал ошибку. Затем я посмотрел в окно и увидел... синий свет.",
+                    "Я почувствовал легкое покалывание и понял, что нахожусь на потолке. Я просто там висел и смеялся. [LAUGH]",
+                    "Конец. Сегодня я завтракал, вися вниз головой. Жизнь налаживается!"
+                ]
+            ],
+            funny: [
+                // Смешная История 1
+                [
+                    "Я решил приготовить торт по новому рецепту. Все шло хорошо, пока я не понял, что перепутал сахар с солью.",
+                    "Тесто выглядело странно, но я решил: 'Ну, это будет 'оригинальный' торт!' Я поставил его в духовку.",
+                    "Через час я попробовал. Это было ужасно. Но мой друг попробовал и... начал громко смеяться! [LAUGH]",
+                    "Конец. Он сказал, что это самый смешной торт, который он когда-либо видел. Пять из пяти по шкале 'странности'!"
+                ],
+                // Смешная История 2 (НОВАЯ)
+                [
+                    "Мой будильник сегодня зазвонил в 3 утра. Я встал, оделся, пошел на кухню и начал варить кофе.",
+                    "Потом я понял, что сегодня суббота, и я не должен никуда идти. Я просто сел и громко засмеялся. [LAUGH]",
+                    "Я решил лечь спать, но не смог найти подушку. Она оказалась на коте, который выглядел очень недовольным. [SCREAM]",
+                    "Конец. Кот обиделся и потребовал двойную порцию завтрака за то, что я использовал его как мебель."
+                ]
+            ]
+        };
+
+        // === 3. Логика озвучки (Text-to-Speech) ===
+
+        function speakText(text) {
+            // Если ttsEnabled = false, мы просто игнорируем озвучку, не выводя ошибок
+            if (!ttsEnabled) return;
+
+            const utterance = new SpeechSynthesisUtterance(text);
+
+            utterance.rate = parseFloat(rateRange.value);
+            utterance.pitch = parseFloat(pitchRange.value);
+
+            // Разрешаем продолжение только после окончания озвучки
+            utterance.onend = () => {
+                isSpeaking = false;
+                nextButton.disabled = false;
+                nextButton.textContent = 'Продолжить >';
+            };
+
+            // Если озвучка не сработала, разблокируем кнопку
+            utterance.onerror = (event) => {
+                 console.error('Ошибка озвучки:', event.error);
+                 isSpeaking = false;
+                 nextButton.disabled = false;
+                 nextButton.textContent = 'Продолжить (ошибка) >';
+            };
+
+            isSpeaking = true;
+            speechSynthesis.speak(utterance);
+        }
+
+        function checkAndPlaySound(partText) {
+            for (let key in soundEffects) {
+                if (soundEffects[key] && soundEffects[key].pause) {
+                    soundEffects[key].pause();
+                    soundEffects[key].currentTime = 0;
+                }
+            }
+
+            if (partText.includes('[KNOCKS]') && soundEffects.knocks) {
+                soundEffects.knocks.play();
+            } else if (partText.includes('[SCREAM]') && soundEffects.scream) {
+                soundEffects.scream.play();
+            } else if (partText.includes('[LAUGH]') && soundEffects.laugh) {
+                soundEffects.laugh.play();
+            }
+
+            return partText.replace(/\[(KNOCKS|SCREAM|LAUGH)\]/g, '').trim();
+        }
+
+
+        // === 4. Логика перехода между частями ===
+
+        function showNextPart() {
+            // Если идет озвучка, останавливаем её, чтобы сразу перейти к следующей части
+            if (isSpeaking && ttsEnabled) {
+                speechSynthesis.cancel();
+                isSpeaking = false;
+            }
+
+            // Если история закончилась
+            if (currentPartIndex >= currentStory.length) {
+                storyTextElement.textContent = "История закончена! Выбери новый жанр.";
+                nextButton.style.display = 'none';
+                return;
+            }
+
+            const rawPart = currentStory[currentPartIndex];
+            const cleanedText = checkAndPlaySound(rawPart);
+
+            storyTextElement.textContent = cleanedText;
+
+            if (ttsEnabled) {
+                speakText(cleanedText);
+                nextButton.disabled = true;
+                nextButton.textContent = 'Озвучка...';
+            } else {
+                 // Если озвучка выключена (или не поддерживается), не блокируем
+                 nextButton.disabled = false;
+                 nextButton.textContent = 'Продолжить >';
+            }
+
+            currentPartIndex++;
+        }
+
+        /**
+         * @description Запускает новую историю по выбранному жанру, выбирая ее СЛУЧАЙНО.
+         * @param {string} genre - Жанр (scary, strange, funny).
+         */
+        function startStory(genre) {
+            if (ttsEnabled) {
+                speechSynthesis.cancel();
+                isSpeaking = false;
+            }
+
+            // Случайный выбор истории
+            const availableStories = allStories[genre];
+            const randomIndex = Math.floor(Math.random() * availableStories.length);
+            currentStory = availableStories[randomIndex];
+
+            currentPartIndex = 0;
+
+            nextButton.style.display = 'block';
+            nextButton.disabled = false;
+            nextButton.textContent = 'Начать историю >';
+
+            storyTextElement.textContent = `Вы выбрали: ${genre === 'scary' ? 'Страшная' : genre === 'strange' ? 'Странная' : 'Смешная'}. Нажмите "Начать историю >"`;
+        }
+
+        // === 5. Обработчики событий ===
+        // Убрали обработчик для overlay. Теперь кнопки жанра - это первый клик.
+
+        // Кнопки выбора жанра
+        document.getElementById('start-scary').addEventListener('click', () => startStory('scary'));
+        document.getElementById('start-strange').addEventListener('click', () => startStory('strange'));
+        document.getElementById('start-funny').addEventListener('click', () => startStory('funny'));
+
+        // Кнопка "Продолжить"
+        nextButton.addEventListener('click', showNextPart);
+
+        // Ползунки настройки голоса
+        pitchRange.addEventListener('input', () => {
+            pitchValueSpan.textContent = pitchRange.value;
+        });
+
+        rateRange.addEventListener('input', () => {
+            rateValueSpan.textContent = rateRange.value;
+        });
+    </script>
+</body>
+</html>
